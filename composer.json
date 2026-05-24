@@ -1,5 +1,5 @@
 {
-    "name": "d3sw/sferalabs-laravel-sqs",
+    "name": "d3sw/sferalabs-laravel-sqs-public",
     "description": "Custom SQS connector for Laravel that supports custom format JSON",
     "type": "library",
     "minimum-stability": "stable",
