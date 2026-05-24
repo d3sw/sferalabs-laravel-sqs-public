@@ -1,0 +1,26 @@
+{
+    "name": "d3sw/sferalabs-laravel-sqs",
+    "description": "Custom SQS connector for Laravel that supports custom format JSON",
+    "type": "library",
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": "^7.0|^8.0",
+        "illuminate/support": "^8.0|^9.0|^10.0|^11.0",
+        "illuminate/queue": "^8.0|^9.0|^10.0|^11.0",
+        "illuminate/bus": "^8.0|^9.0|^10.0|^11.0",
+        "aws/aws-sdk-php": "~3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Deluxe\\SqsRaw\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Deluxe\\SqsRaw\\SqsRawServiceProvider"
+            ]
+        }
+    }
+}

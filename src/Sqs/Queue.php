@@ -1,0 +1,121 @@
+<?php
+
+namespace Deluxe\SqsRaw\Sqs;
+
+use Deluxe\SqsRaw\Jobs\DispatcherJob;
+use Illuminate\Contracts\Queue\Job;
+use Illuminate\Queue\SqsQueue;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Queue\Jobs\SqsJob;
+
+class Queue extends SqsQueue
+{
+    /**
+     * Create a payload string from the given job and data.
+     *
+     * @param string $job
+     * @param mixed $data
+     * @param string $queue
+     * @return string
+     */
+    protected function createPayload($job, $queue = null, $data = '')
+    {
+        if (!$job instanceof DispatcherJob) {
+            return parent::createPayload($job, $queue, $data);
+        }
+
+        $handlerJob = $this->getClass($queue) . '@handle';
+
+        return json_encode(['job' => $handlerJob, 'data' => $job->getPayload()]);
+    }
+
+    /**
+     * @param $queue
+     * @return string
+     */
+    private function getClass($queue = null): string
+    {
+        if (!$queue) {
+            return Config::get('sqs-raw.default-handler');
+        }
+
+        $splits = explode('/', $queue);
+        $queue = end($splits);
+
+        return (array_key_exists($queue, Config::get('sqs-raw.handlers')))
+            ? Config::get('sqs-raw.handlers')[$queue]
+            : Config::get('sqs-raw.default-handler');
+    }
+
+    /**
+     * Pop the next job off of the queue.
+     *
+     * @param string $queue
+     * @return Job|null
+     */
+    public function pop($queue = null): SqsJob|Job|null
+    {
+        $queue = $this->getQueue($queue);
+
+        $response = $this->sqs->receiveMessage([
+            'QueueUrl' => $queue,
+            'AttributeNames' => ['ApproximateReceiveCount'],
+        ]);
+
+        if (isset($response['Messages']) && count($response['Messages']) > 0) {
+            $queueId = explode('/', $queue);
+            $queueId = array_pop($queueId);
+
+            $class = (array_key_exists($queueId, $this->container['config']->get('sqs-raw.handlers')))
+                ? $this->container['config']->get('sqs-raw.handlers')[$queueId]
+                : $this->container['config']->get('sqs-raw.default-handler');
+
+            $response = $this->modifyPayload($response['Messages'][0], $class);
+
+            return new SqsJob($this->container, $this->sqs, $response, $this->connectionName, $queue);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param string|array $payload
+     * @param string $class
+     * @return array
+     */
+    private function modifyPayload($payload, $class): array
+    {
+        if (!is_array($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        $body = json_decode($payload['Body'], true);
+
+        $body = [
+            'job' => $class . '@handle',
+            'data' => $body,
+            'uuid' => $payload['MessageId']
+        ];
+
+        $payload['Body'] = json_encode($body);
+
+        return $payload;
+    }
+
+    /**
+     * @param string $payload
+     * @param null $queue
+     * @param array $options
+     * @return mixed|null
+     */
+    public function pushRaw($payload, $queue = null, array $options = [])
+    {
+        $payload = json_decode($payload, true);
+
+        if (isset($payload['data'], $payload['job'])) {
+            $payload = $payload['data'];
+        }
+
+        return parent::pushRaw(json_encode($payload), $queue, $options);
+    }
+}
